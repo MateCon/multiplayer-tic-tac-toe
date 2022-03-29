@@ -34,23 +34,23 @@ function Index() {
     return isLoading ? (
         <div>Loading...</div>
     ) : (
-        <form
-            onSubmit={(e) => {
-                e.preventDefault();
-                userContext.setName(name);
-                socket.emit('enqueue', name);
-                setIsLoading(true);
-            }}
-        >
-            <label>Name</label>
-            <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-            />
-            <button type="submit">Play</button>
-        </form>
-    );
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    userContext.setName(name);
+                    socket.emit('enqueue', name);
+                    setIsLoading(true);
+                }}
+            >
+                <label>Name</label>
+                <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
+                <button type="submit">Play</button>
+            </form>
+        );
 }
 
 interface BoardProps {
@@ -160,8 +160,8 @@ function Game() {
             onMove={onMove}
         />
     ) : (
-        <div>Loading...</div>
-    );
+            <div>Loading...</div>
+        );
 }
 
 function App() {
