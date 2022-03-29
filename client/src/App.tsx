@@ -1,84 +1,185 @@
-import { useContext, useEffect, useState } from 'react';
+import React, { FC, useContext, useEffect, useMemo, useState } from 'react';
 import { socket, SocketContext } from './context/socket';
 import {
-  BrowserRouter,
-  Routes,
-  Route,
-  useNavigate,
-  useParams
+    BrowserRouter,
+    Routes,
+    Route,
+    useNavigate,
+    useParams,
 } from 'react-router-dom';
+import { UserContext } from './context/user';
 
 function Index() {
-  const navigate = useNavigate();
-  const socket = useContext(SocketContext);
-  const [name, setName] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+    const navigate = useNavigate();
+    const socket = useContext(SocketContext);
+    const userContext = useContext(UserContext);
+    const [name, setName] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    socket.on('room_found', (roomId: number) => {
-      socket.emit('join_room', roomId, name);
+    useEffect(() => {
+        socket.on('room_found', (roomId: number) => {
+            socket.emit('join_room', roomId, name);
+        });
+
+        socket.on('room_joined', (roomId: number) => {
+            navigate(`/game/${roomId}`);
+        });
+
+        return () => {
+            socket.off('room_found');
+            socket.off('room_joined');
+        };
+    }, [navigate, socket, name]);
+
+    return isLoading ? (
+        <div>Loading...</div>
+    ) : (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault();
+                userContext.setName(name);
+                socket.emit('enqueue', name);
+                setIsLoading(true);
+            }}
+        >
+            <label>Name</label>
+            <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+            />
+            <button type="submit">Play</button>
+        </form>
+    );
+}
+
+interface BoardProps {
+    state: string;
+    player_type: 'X' | 'O' | 'Spectator';
+    turn: Turn;
+    last_move?: number;
+    winner: 'X' | 'O' | null;
+    onMove: (move: number) => void;
+}
+
+const Board: FC<BoardProps> = ({
+    state,
+    turn,
+    player_type,
+    winner,
+    onMove,
+}) => {
+    useEffect(() => {
+        console.log(state, player_type);
     });
 
-    socket.on('room_joined', (roomId: number) => {
-      navigate(`/game/${roomId}`);
-    });
+    return (
+        <div className="board">
+            {state &&
+                state.split('').map((cell: string, i: number) => (
+                    <button
+                        key={i}
+                        onClick={() => onMove(i)}
+                        disabled={
+                            cell !== '-' ||
+                            player_type !== turn ||
+                            winner !== null
+                        }
+                    >
+                        {cell === '-' ? '' : cell}
+                    </button>
+                ))}
+            {winner && <div>{winner} won!</div>}
+        </div>
+    );
+};
 
-    return () => {
-      socket.off('room_found');
-      socket.off('room_joined');
-    }
-  }, [navigate, socket, name]);
+interface User {
+    id: string;
+    name: string;
+}
 
-  return (
-    isLoading
-      ? <div>Loading...</div>
-      : <form onSubmit={(e) => {
-        e.preventDefault();
-        socket.emit('enqueue', name);
-        setIsLoading(true);
-      }}>
-        <label>Name</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="submit">Play</button>
-      </form>
-  );
+type Turn = 'X' | 'O';
+
+interface GameState {
+    state: string;
+    turn: Turn;
+    winner: 'X' | 'O' | null;
+}
+
+interface Room extends GameState {
+    id: string;
+    users: User[];
 }
 
 function Game() {
-  const { roomId } = useParams();
-  const socket = useContext(SocketContext);
-  const [isLoading, setIsLoading] = useState(true);
+    const { roomId } = useParams();
+    const socket = useContext(SocketContext);
+    const { name } = useContext(UserContext);
+    const [isLoading, setIsLoading] = useState(true);
+    const [room, setRoom] = useState<Room | null>(null);
+    const player_type = useMemo(() => {
+        if (room) {
+            if (room.users[0].name === name) return 'X';
+            if (room.users[1].name === name) return 'O';
+        }
+        return 'Spectator';
+    }, [room, name]);
 
-  useEffect(() => {
-    if (!roomId) return;
+    const onMove = (move: number) => {
+        socket.emit('move', roomId, move);
+    };
 
-    socket.on('room_data', (data: any) => {
-      console.log(data)
-      setIsLoading(false);
-    });
+    useEffect(() => {
+        if (!roomId) return;
 
-    socket.emit('get_room_data', roomId);
+        socket.on('room_data', (data: Room) => {
+            setRoom(data);
+            setIsLoading(false);
+        });
 
-    return () => {
-      socket.off('room_data');
-    }
-  }, [socket, roomId]);
+        socket.on('move', (state: string, turn: Turn, winner) => {
+            setRoom((prev: Room | null) =>
+                prev ? { ...prev, state, turn, winner } : null
+            );
+        });
 
-  return <div>Game</div>
+        socket.emit('get_room_data', roomId);
+
+        return () => {
+            socket.off('room_data');
+        };
+    }, [socket, roomId]);
+
+    return room ? (
+        <Board
+            state={room.state}
+            turn={room.turn}
+            player_type={player_type}
+            winner={room.winner}
+            onMove={onMove}
+        />
+    ) : (
+        <div>Loading...</div>
+    );
 }
 
 function App() {
-  return (
-    <SocketContext.Provider value={socket}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/game/:roomId" element={<Game />} />
-          <Route path="*" element={<div>404</div>} />
-        </Routes>
-      </BrowserRouter>
-    </SocketContext.Provider>
-  );
+    const [username, setUsername] = useState<string>('');
+
+    return (
+        <UserContext.Provider value={{ name: username, setName: setUsername }}>
+            <SocketContext.Provider value={socket}>
+                <BrowserRouter>
+                    <Routes>
+                        <Route path="/" element={<Index />} />
+                        <Route path="/game/:roomId" element={<Game />} />
+                        <Route path="*" element={<div>404</div>} />
+                    </Routes>
+                </BrowserRouter>
+            </SocketContext.Provider>
+        </UserContext.Provider>
+    );
 }
 
 export default App;

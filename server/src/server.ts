@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
+import { checkWinner } from './helpers';
 
 const port: number = 8080;
 const app = express();
@@ -20,6 +21,9 @@ interface User {
 interface Room {
     id: string;
     users: User[];
+    state: string;
+    turn: 'X' | 'O';
+    winner: 'X' | 'O' | null;
 }
 
 let queue: User[] = [];
@@ -32,7 +36,13 @@ io.on('connection', (socket: Socket) => {
         } else {
             const roomId = Math.floor(Math.random() * 1000000).toString();
             const firstUser: User = queue.shift()!;
-            rooms[roomId] = { id: roomId, users: [] };
+            rooms[roomId] = {
+                id: roomId,
+                users: [],
+                state: '---------',
+                turn: 'X',
+                winner: null,
+            };
             socket.emit('room_found', roomId);
             socket.to(firstUser.id).emit('room_found', roomId);
         }
@@ -46,6 +56,22 @@ io.on('connection', (socket: Socket) => {
 
     socket.on('get_room_data', (roomId: string) => {
         socket.emit('room_data', rooms[roomId]);
+    });
+
+    socket.on('move', (roomId: number, move: number) => {
+        const room = rooms[roomId];
+        room.state =
+            room.state.substr(0, move) +
+            room.turn +
+            room.state.substr(move + 1);
+        room.turn = room.turn === 'X' ? 'O' : 'X';
+        room.winner = checkWinner(room.state);
+        io.to(roomId.toString()).emit(
+            'move',
+            room.state,
+            room.turn,
+            room.winner
+        );
     });
 
     socket.on('disconnect', () => {
