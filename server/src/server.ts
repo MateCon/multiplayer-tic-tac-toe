@@ -23,7 +23,7 @@ interface Room {
     users: User[];
     state: string;
     turn: 'X' | 'O';
-    winner: 'X' | 'O' | null;
+    winner: 'X' | 'O' | 'Draw' | null;
 }
 
 let queue: User[] = [];
@@ -70,7 +70,8 @@ io.on('connection', (socket: Socket) => {
             'move',
             room.state,
             room.turn,
-            room.winner
+            room.winner,
+            move
         );
     });
 

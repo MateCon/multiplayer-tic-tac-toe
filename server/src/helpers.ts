@@ -1,4 +1,4 @@
-export const checkWinner = (state: string): 'X' | 'O' | null => {
+export const checkWinner = (state: string): 'X' | 'O' | 'Draw' | null => {
     const options: number[][] = [
         [0, 1, 2],
         [3, 4, 5],
@@ -17,5 +17,5 @@ export const checkWinner = (state: string): 'X' | 'O' | null => {
             }
         }
     }
-    return null;
+    return state.split('').every((x) => x !== '-') ? 'Draw' : null;
 };
